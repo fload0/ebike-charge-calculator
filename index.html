@@ -23,12 +23,36 @@
     .card { background: var(--card); border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid var(--border); }
     .card-title { font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; }
     
-    .input-group { margin-bottom: 14px; }
-    label { display: block; font-size: 0.9rem; color: var(--text-muted); margin-bottom: 6px; }
-    input[type="number"] { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 12px; border-radius: 8px; width: 100%; font-size: 1rem; }
+    .input-group { margin-bottom: 18px; }
+    label { display: block; font-size: 0.9rem; color: var(--text-muted); margin-bottom: 8px; }
     
+    /* Layout für Ladestand Slider + Input */
+    .soc-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .soc-number-input { width: 80px !important; text-align: center; font-size: 1.1rem !important; font-weight: bold; color: var(--primary) !important; padding: 6px !important; }
+    
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--primary);
+      height: 8px;
+      background: var(--border);
+      border-radius: 4px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    /* Quick Preset Buttons */
+    .presets { display: flex; gap: 6px; margin-top: 10px; }
+    .chip { background: var(--bg); border: 1px solid var(--border); color: var(--text-muted); padding: 6px 10px; border-radius: 16px; font-size: 0.8rem; cursor: pointer; flex: 1; text-align: center; }
+    .chip:active { background: var(--primary); color: white; }
+
+    /* Layout für h und min */
     .time-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    
+    .time-field { display: flex; align-items: center; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding-right: 12px; }
+    .time-field input { background: transparent; border: none; color: var(--text); padding: 12px; width: 100%; font-size: 1.1rem; outline: none; }
+    .time-field span { color: var(--text-muted); font-size: 0.9rem; font-weight: bold; }
+
+    input[type="number"] { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 12px; border-radius: 8px; width: 100%; font-size: 1rem; }
+
     button { background: var(--primary); color: white; border: none; padding: 14px; border-radius: 8px; font-weight: bold; width: 100%; cursor: pointer; font-size: 1rem; margin-top: 8px; }
     button.secondary { background: transparent; border: 1px solid var(--border); color: var(--text); margin-top: 8px; }
 
@@ -48,22 +72,45 @@
   <div class="card">
     <div class="card-title">Eingabe laut E-Bike Display</div>
     
+    <!-- AKTUELLES SOC (SLIDER + NUMERISCH + CHIPS) -->
     <div class="input-group">
-      <label for="currentSoc">Aktueller Ladestand (%)</label>
-      <input type="number" id="currentSoc" placeholder="z. B. 35" min="0" max="100">
+      <div class="soc-header">
+        <label for="socRange" style="margin: 0;">Aktueller Ladestand</label>
+        <div>
+          <input type="number" id="socNumber" class="soc-number-input" value="30" min="0" max="100" oninput="syncSocFromNumber(this.value)">
+          <span style="font-weight: bold; color: var(--primary);">%</span>
+        </div>
+      </div>
+      <input type="range" id="socRange" min="0" max="100" value="30" oninput="syncSocFromRange(this.value)">
+      
+      <div class="presets">
+        <div class="chip" onclick="setPreset(20)">20%</div>
+        <div class="chip" onclick="setPreset(30)">30%</div>
+        <div class="chip" onclick="setPreset(40)">40%</div>
+        <div class="chip" onclick="setPreset(50)">50%</div>
+        <div class="chip" onclick="setPreset(60)">60%</div>
+      </div>
     </div>
 
+    <!-- DAUER BIS 100% (STUNDEN + MINUTEN) -->
     <div class="input-group">
       <label>Dauer bis 100% (laut Display)</label>
       <div class="time-inputs">
-        <input type="number" id="hours100" placeholder="Stunden" min="0">
-        <input type="number" id="minutes100" placeholder="Minuten" min="0" max="59">
+        <div class="time-field">
+          <input type="number" id="hours100" placeholder="0" min="0" max="24">
+          <span>Std.</span>
+        </div>
+        <div class="time-field">
+          <input type="number" id="minutes100" placeholder="0" min="0" max="59">
+          <span>Min.</span>
+        </div>
       </div>
     </div>
 
     <button onclick="calculateChargeTime()">80% Ladezeit berechnen</button>
   </div>
 
+  <!-- ERGEBNIS ANZEIGE -->
   <div id="resultBox" class="result-box">
     <div class="card-title">Zielzeit für 80% Ladung</div>
     <div class="time-target" id="targetTime">--:-- Uhr</div>
@@ -71,7 +118,7 @@
 
     <div class="action-buttons" id="actionButtons">
       <button onclick="openClockApp()">⏰ Wecker-App öffnen</button>
-      <button class="secondary" onclick="scheduleNotification()">🔔 PWA Erinnung stellen</button>
+      <button class="secondary" onclick="scheduleNotification()">🔔 PWA Erinnerung stellen</button>
     </div>
   </div>
 
@@ -83,21 +130,38 @@
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('sw.js');
       }
-      // Benachrichtigungsrechte anfragen
       if ("Notification" in window && Notification.permission !== "granted") {
         Notification.requestPermission();
       }
     };
 
+    // Synchronisation Slider -> Zahlenfeld
+    function syncSocFromRange(val) {
+      document.getElementById('socNumber').value = val;
+    }
+
+    // Synchronisation Zahlenfeld -> Slider
+    function syncSocFromNumber(val) {
+      if (val < 0) val = 0;
+      if (val > 100) val = 100;
+      document.getElementById('socRange').value = val;
+    }
+
+    // Schnellwahl Preset-Buttons
+    function setPreset(val) {
+      document.getElementById('socRange').value = val;
+      document.getElementById('socNumber').value = val;
+    }
+
     function calculateChargeTime() {
-      const soc = parseFloat(document.getElementById('currentSoc').value);
+      const soc = parseFloat(document.getElementById('socNumber').value);
       const hours = parseFloat(document.getElementById('hours100').value) || 0;
       const minutes = parseFloat(document.getElementById('minutes100').value) || 0;
 
       const resultBox = document.getElementById('resultBox');
 
       if (isNaN(soc) || (hours === 0 && minutes === 0)) {
-        alert("Bitte gib den aktuellen Ladestand und die Dauer ein.");
+        alert("Bitte gib den aktuellen Ladestand und die Dauer bis 100% ein.");
         return;
       }
 
@@ -137,15 +201,11 @@
       document.getElementById('durationText').innerText = `Ladedauer: ${durationString} (noch ${remainingPercentTo80}%)`;
     }
 
-    // Öffnet die System-Uhr-App
     function openClockApp() {
       const isAndroid = /Android/i.test(navigator.userAgent);
-      
       if (isAndroid) {
-        // Öffnet die Standard-Uhr-App auf Android
         window.location.href = "intent://clock/#Intent;scheme=android.intent.action.SHOW_ALARMS;package=com.google.android.deskclock;end";
       } else {
-        // Versuch für iOS / Allgemein
         window.location.href = "clock://";
         setTimeout(() => {
           alert(`Bitte stelle deinen Wecker auf ${targetTimeFormatted}.`);
@@ -153,7 +213,6 @@
       }
     }
 
-    // Plant eine In-App / System-Benachrichtigung
     function scheduleNotification() {
       if (!("Notification" in window)) {
         alert("Dieser Browser unterstützt keine System-Benachrichtigungen.");
@@ -161,24 +220,16 @@
       }
 
       if (Notification.permission === "granted") {
-        const msToWait = calculatedMinutes * 60 * 1000;
-        
         alert(`Erinnerung gestellt! Du erhältst in ${calculatedMinutes} Minuten (${targetTimeFormatted}) einen Alert.`);
-
         setTimeout(() => {
           new Notification("🔋 E-Bike Akku geladen!", {
             body: "Dein E-Bike hat ca. 80% Ladung erreicht. Bitte jetzt abstecken!",
             icon: "https://cdn-icons-png.flaticon.com/512/3198/3198344.png"
           });
-        }, msToWait);
-
+        }, calculatedMinutes * 60 * 1000);
       } else {
         Notification.requestPermission().then(permission => {
-          if (permission === "granted") {
-            scheduleNotification();
-          } else {
-            alert("Benachrichtigungen wurden blockiert.");
-          }
+          if (permission === "granted") scheduleNotification();
         });
       }
     }
