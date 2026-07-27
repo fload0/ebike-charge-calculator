@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>E-Bike Laderechner (80%)</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#10b981">
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --primary: #10b981;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --border: #334155;
+      --warning: #f59e0b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); padding: 16px; max-width: 500px; margin: 0 auto; min-height: 100vh; }
+    
+    h1 { font-size: 1.5rem; text-align: center; margin-bottom: 20px; color: var(--primary); }
+    .card { background: var(--card); border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid var(--border); }
+    .card-title { font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; }
+    
+    .input-group { margin-bottom: 14px; }
+    label { display: block; font-size: 0.9rem; color: var(--text-muted); margin-bottom: 6px; }
+    input[type="number"] { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 12px; border-radius: 8px; width: 100%; font-size: 1rem; }
+    
+    .time-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    
+    button { background: var(--primary); color: white; border: none; padding: 14px; border-radius: 8px; font-weight: bold; width: 100%; cursor: pointer; font-size: 1rem; margin-top: 8px; }
+    button.secondary { background: transparent; border: 1px solid var(--border); color: var(--text); margin-top: 8px; }
+
+    .result-box { display: none; background: rgba(16, 185, 129, 0.1); border: 1px solid var(--primary); border-radius: 12px; padding: 16px; margin-top: 16px; text-align: center; }
+    .result-box.warning { background: rgba(245, 158, 11, 0.1); border-color: var(--warning); }
+    
+    .time-target { font-size: 2.2rem; font-weight: bold; color: var(--primary); margin: 8px 0; }
+    .duration-text { font-size: 1rem; color: var(--text-muted); margin-bottom: 12px; }
+    
+    .action-buttons { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+  </style>
+</head>
+<body>
+
+  <h1>🚲 E-Bike 80% Laderechner</h1>
+
+  <div class="card">
+    <div class="card-title">Eingabe laut E-Bike Display</div>
+    
+    <div class="input-group">
+      <label for="currentSoc">Aktueller Ladestand (%)</label>
+      <input type="number" id="currentSoc" placeholder="z. B. 35" min="0" max="100">
+    </div>
+
+    <div class="input-group">
+      <label>Dauer bis 100% (laut Display)</label>
+      <div class="time-inputs">
+        <input type="number" id="hours100" placeholder="Stunden" min="0">
+        <input type="number" id="minutes100" placeholder="Minuten" min="0" max="59">
+      </div>
+    </div>
+
+    <button onclick="calculateChargeTime()">80% Ladezeit berechnen</button>
+  </div>
+
+  <div id="resultBox" class="result-box">
+    <div class="card-title">Zielzeit für 80% Ladung</div>
+    <div class="time-target" id="targetTime">--:-- Uhr</div>
+    <div class="duration-text" id="durationText">Ladedauer: -- min</div>
+
+    <div class="action-buttons" id="actionButtons">
+      <button onclick="openClockApp()">⏰ Wecker-App öffnen</button>
+      <button class="secondary" onclick="scheduleNotification()">🔔 PWA Erinnung stellen</button>
+    </div>
+  </div>
+
+  <script>
+    let calculatedMinutes = 0;
+    let targetTimeFormatted = "";
+
+    window.onload = () => {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js');
+      }
+      // Benachrichtigungsrechte anfragen
+      if ("Notification" in window && Notification.permission !== "granted") {
+        Notification.requestPermission();
+      }
+    };
+
+    function calculateChargeTime() {
+      const soc = parseFloat(document.getElementById('currentSoc').value);
+      const hours = parseFloat(document.getElementById('hours100').value) || 0;
+      const minutes = parseFloat(document.getElementById('minutes100').value) || 0;
+
+      const resultBox = document.getElementById('resultBox');
+
+      if (isNaN(soc) || (hours === 0 && minutes === 0)) {
+        alert("Bitte gib den aktuellen Ladestand und die Dauer ein.");
+        return;
+      }
+
+      if (soc >= 80) {
+        resultBox.style.display = "block";
+        resultBox.classList.add("warning");
+        document.getElementById('targetTime').innerText = "Bereits ≥ 80%";
+        document.getElementById('targetTime').style.color = "var(--warning)";
+        document.getElementById('durationText').innerText = "Der Akku hat bereits deinen Ziel-Ladestand erreicht.";
+        document.getElementById('actionButtons').style.display = "none";
+        return;
+      }
+
+      document.getElementById('actionButtons').style.display = "flex";
+
+      const totalMinutesTo100 = (hours * 60) + minutes;
+      const remainingPercentTo100 = 100 - soc;
+      const remainingPercentTo80 = 80 - soc;
+
+      calculatedMinutes = Math.round((totalMinutesTo100 / remainingPercentTo100) * remainingPercentTo80);
+
+      const now = new Date();
+      const targetDate = new Date(now.getTime() + calculatedMinutes * 60000);
+
+      const targetHours = String(targetDate.getHours()).padStart(2, '0');
+      const targetMins = String(targetDate.getMinutes()).padStart(2, '0');
+      targetTimeFormatted = `${targetHours}:${targetMins} Uhr`;
+
+      const calcHours = Math.floor(calculatedMinutes / 60);
+      const calcMins = calculatedMinutes % 60;
+      let durationString = calcHours > 0 ? `${calcHours} Std. ${calcMins} Min.` : `${calcMins} Min.`;
+
+      resultBox.style.display = "block";
+      resultBox.classList.remove("warning");
+      document.getElementById('targetTime').style.color = "var(--primary)";
+      document.getElementById('targetTime').innerText = `ca. ${targetTimeFormatted}`;
+      document.getElementById('durationText').innerText = `Ladedauer: ${durationString} (noch ${remainingPercentTo80}%)`;
+    }
+
+    // Öffnet die System-Uhr-App
+    function openClockApp() {
+      const isAndroid = /Android/i.test(navigator.userAgent);
+      
+      if (isAndroid) {
+        // Öffnet die Standard-Uhr-App auf Android
+        window.location.href = "intent://clock/#Intent;scheme=android.intent.action.SHOW_ALARMS;package=com.google.android.deskclock;end";
+      } else {
+        // Versuch für iOS / Allgemein
+        window.location.href = "clock://";
+        setTimeout(() => {
+          alert(`Bitte stelle deinen Wecker auf ${targetTimeFormatted}.`);
+        }, 1000);
+      }
+    }
+
+    // Plant eine In-App / System-Benachrichtigung
+    function scheduleNotification() {
+      if (!("Notification" in window)) {
+        alert("Dieser Browser unterstützt keine System-Benachrichtigungen.");
+        return;
+      }
+
+      if (Notification.permission === "granted") {
+        const msToWait = calculatedMinutes * 60 * 1000;
+        
+        alert(`Erinnerung gestellt! Du erhältst in ${calculatedMinutes} Minuten (${targetTimeFormatted}) einen Alert.`);
+
+        setTimeout(() => {
+          new Notification("🔋 E-Bike Akku geladen!", {
+            body: "Dein E-Bike hat ca. 80% Ladung erreicht. Bitte jetzt abstecken!",
+            icon: "https://cdn-icons-png.flaticon.com/512/3198/3198344.png"
+          });
+        }, msToWait);
+
+      } else {
+        Notification.requestPermission().then(permission => {
+          if (permission === "granted") {
+            scheduleNotification();
+          } else {
+            alert("Benachrichtigungen wurden blockiert.");
+          }
+        });
+      }
+    }
+  </script>
+</body>
+</html>
