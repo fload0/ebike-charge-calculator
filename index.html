@@ -201,17 +201,21 @@
       document.getElementById('durationText').innerText = `Ladedauer: ${durationString} (noch ${remainingPercentTo80}%)`;
     }
 
-    function openClockApp() {
-      const isAndroid = /Android/i.test(navigator.userAgent);
-      if (isAndroid) {
-        window.location.href = "intent://clock/#Intent;scheme=android.intent.action.SHOW_ALARMS;package=com.google.android.deskclock;end";
-      } else {
-        window.location.href = "clock://";
-        setTimeout(() => {
-          alert(`Bitte stelle deinen Wecker auf ${targetTimeFormatted}.`);
-        }, 1000);
-      }
-    }
+// Öffnet speziell Alarm Clock Xtreme von AVG
+function openClockApp() {
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  
+  if (isAndroid) {
+    // Intent exakt für Alarm Clock Xtreme (AVG Labs)
+    window.location.href = "intent://clock/#Intent;scheme=android.intent.action.SHOW_ALARMS;package=com.alarmclock.xtreme.free;end";
+  } else {
+    // Fallback für andere Geräte
+    window.location.href = "clock://";
+    setTimeout(() => {
+      alert(`Bitte stelle deinen Wecker auf ${targetTimeFormatted}.`);
+    }, 1000);
+  }
+}
 
     function scheduleNotification() {
       if (!("Notification" in window)) {
